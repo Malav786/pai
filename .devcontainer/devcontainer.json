@@ -1,0 +1,48 @@
+{
+    "name": "practai",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "hostRequirements": {
+        "cpus": 2
+    },
+    "waitFor": "onCreateCommand",
+    "onCreateCommand": "sudo bash .devcontainer/configure_environment.sh",
+    "postAttachCommand": "bash .devcontainer/post_attach.sh",
+    "customizations": {
+        "codespaces": {
+            "openFiles": []
+        },
+        "vscode": {
+            "extensions": [
+                "ms-toolsai.jupyter",
+                "ms-python.python",
+                "ms-python.black-formatter",
+                "ms-python.isort",
+                "ms-python.mypy-type-checker",
+                "ms-python.flake8",
+                "streetsidesoftware.code-spell-checker"
+            ]
+        },
+        "settings": {
+            "python.terminal.activateEnvInCurrentTerminal": true,
+            "python.defaultInterpreterPath": ".venv/bin/python",
+            "python.autoComplete.extraPaths": [
+                "./.venv/bin",
+                "./.venv/lib"
+            ],
+            "python.analysis.extraPaths": [
+                "./.venv/bin",
+                "./.venv/lib"
+            ],
+            "black-formatter.args": [
+                "--line-length",
+                "79"
+            ],
+            "isort.args": [
+                "--profile",
+                "black"
+            ]
+        }
+    }
+}
