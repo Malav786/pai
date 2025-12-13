@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import Optional, Tuple
+import matplotlib.pyplot as plt
 
 import numpy as np
 from sklearn.datasets import fetch_lfw_people
@@ -171,6 +172,49 @@ class LFWDataLoader:
         indices = np.where(self.target == person_id)[0]
         return indices
 
+    def show_distinct_people(
+        self,
+        n_cols: int = 4,
+        figsize: Optional[Tuple[float, float]] = None,
+        seed: Optional[int] = None
+    ) -> None:
+        """Show 1 random image per distinct person (identity).
+
+        Args:
+            n_cols: Number of columns for the grid
+            figsize: Figure size. If None, computed automatically.
+            seed: Random seed for reproducibility
+        """
+        if self.dataset is None:
+            raise ValueError("Dataset not loaded. Call load() first.")
+
+        rng = np.random.default_rng(seed)
+        n_people = len(self.target_names)
+
+        # pick one random image index for each person id
+        chosen = []
+        for person_id in range(n_people):
+            person_indices = np.where(self.target == person_id)[0]
+            chosen.append(int(rng.choice(person_indices)))
+        chosen = np.array(chosen)
+
+        n_rows = int(np.ceil(n_people / n_cols))
+        if figsize is None:
+            figsize = (3 * n_cols, 3.5 * n_rows)
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+        axes = np.array(axes).reshape(-1)
+
+        for ax, idx in zip(axes, chosen):
+            ax.imshow(self.images[idx], cmap="gray")
+            ax.set_title(self.target_names[self.target[idx]], fontsize=9)
+            ax.axis("off")
+
+        for ax in axes[len(chosen):]:
+            ax.axis("off")
+
+        plt.tight_layout()
+        plt.show()
 
 def load_lfw_data(
     data_home: str = '../dataset/',
@@ -206,4 +250,5 @@ def load_lfw_data(
     )
     loader.load()
     return loader
+
 
