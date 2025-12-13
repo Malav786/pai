@@ -1,0 +1,18 @@
+seed: 42
+device: cpu # or cuda
+lfw:
+ min_faces_per_person: 70
+ resize: 0.4
+train:
+ batch_size: 64
+ epochs_classifier: 30
+ epochs_autoencoder: 40
+autoencoder:
+ latent_dim: 128
+attack:
+ nes_sigma: 0.1
+ nes_pop: 50
+ nes_iters: 800
+detector:
+ window_size: 20
+ train_fraction: 0.6 
