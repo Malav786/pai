@@ -14,11 +14,11 @@ def load_lfw(min_faces_per_person=70, resize=0.4):
     target_names = lfw.target_names
     return X.astype('float32')/255.0, y, target_names
 
-def create_splits(X, y, test_size=0.2, val_size=0.1, random_state=42):
+def create_splits(X, y, test_size, val_size, random_state):
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=test_size+val_size, stratify=y, random_state=random_state)
-    rel = val_size / (test_size + val_size)
-    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp,test_size=rel, stratify=y_temp, random_state=random_state)
-    return X_train, y_train, X_val, y_val, X_test, y_test 
+    rel_test = test_size / (test_size + val_size)
+    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=rel_test, stratify=y_temp, random_state=random_state)
+    return X_train, y_train, X_val, y_val, X_test, y_test
 
 class NumpyFaceDataset(data.Dataset):
     def __init__(self, X, y=None, transform=None):
