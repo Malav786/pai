@@ -43,12 +43,14 @@ It does not have a standard open-source license (such as MIT or Apache) and is s
 
 ### 6. Data processing
 
-**No significant processing was performed on the data** beyond the standard preprocessing provided by scikit-learn's `fetch_lfw_people()` function, which includes:
+**To simplify the dataset for this project**, we filtered the data to include only people with at least 70 faces per person (`min_faces_per_person=70`). This reduces the dataset from thousands of people to 7 people, but ensures sufficient samples per person for training and evaluation.
+
+Beyond this filtering, no significant processing was performed on the data beyond the standard preprocessing provided by scikit-learn's `fetch_lfw_people()` function, which includes:
 - Automatic download and caching
 - JPEG decoding
-- Resizing (as specified by the `resize` parameter)
+- Resizing (as specified by the `resize` parameter, set to 0.4)
 - Conversion to numpy arrays
-- Filtering by minimum faces per person (as specified by `min_faces_per_person` parameter)
+- Filtering by minimum faces per person (set to 70 for this project)
 
 ### Dataset details (as used in this project)
 
