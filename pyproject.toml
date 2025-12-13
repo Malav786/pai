@@ -20,6 +20,8 @@ pandas = "^2.2.3"
 seaborn = "^0.13.2"
 scipy = "^1.14.1"
 onnx = "^1.17.0"
+tqdm = "^4.67.1"
+scikit-image = "^0.25.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.8.0"

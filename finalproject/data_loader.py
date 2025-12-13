@@ -176,7 +176,7 @@ class LFWDataLoader:
         self,
         n_cols: int = 4,
         figsize: Optional[Tuple[float, float]] = None,
-        seed: Optional[int] = None
+        seed: Optional[int] = 42
     ) -> None:
         """Show 1 random image per distinct person (identity).
 
