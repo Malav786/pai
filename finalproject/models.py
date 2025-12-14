@@ -18,9 +18,6 @@ class SmallCNN(nn.Module):
         x = F.relu(self.conv1(x))
         x = self.pool(F.relu(self.conv2(x)))
         x = self.fc(x)
-<<<<<<< Updated upstream
-        return x 
-=======
         return x
 
 class ConvEncoder(nn.Module):
@@ -229,4 +226,3 @@ def train_autoencoder(encoder, decoder, train_ds, val_ds=None, device='cpu', epo
         decoder.load_state_dict(best_decoder_state)
     
     return encoder, decoder
->>>>>>> Stashed changes
