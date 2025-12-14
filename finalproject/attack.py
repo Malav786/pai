@@ -11,9 +11,9 @@ def softmax(x):
     return e / e.sum()
 
 
-def nes_optimize(decoder, query_fn, class_index, latent_dim=128, pop=50, sigma=0.1, 
-                 lr=0.1, iters=500, device='cpu', latent_reg=0.0, sigma_anneal=True,
-                 min_iters=100):
+def nes_optimize(decoder, query_fn, class_index, latent_dim, pop, sigma,
+                lr, iters, device, latent_reg, sigma_anneal,
+                min_iters, use_antithetic):
     """
     Optimize latent vector using NES to maximize target class probability.
     
@@ -35,61 +35,71 @@ def nes_optimize(decoder, query_fn, class_index, latent_dim=128, pop=50, sigma=0
         history: Best probabilities per iteration
         best_image: Reconstructed image
     """
-    # Initialize latent vector
+    decoder.eval()
+
     z = np.random.randn(latent_dim).astype(np.float32)
     best_z = z.copy()
     best_score = -np.inf
     best_image = None
     history = []
 
-    initial_sigma = sigma
+    initial_sigma = float(sigma)
 
     for t in trange(iters, desc="NES Optimization"):
-        # Progressive sigma annealing
-        current_sigma = initial_sigma * (1.0 - 0.9 * (t / iters)) if sigma_anneal else sigma
+        current_sigma = initial_sigma * (1.0 - 0.9 * (t / iters)) if sigma_anneal else initial_sigma
 
-        # Sample population of perturbations
-        eps = np.random.randn(pop, latent_dim).astype(np.float32)
-        scores = np.zeros(pop, dtype=np.float32)
+        # --- sample perturbations ---
+        if use_antithetic:
+            half = pop // 2
+            eps_half = np.random.randn(half, latent_dim).astype(np.float32)
+            eps = np.concatenate([eps_half, -eps_half], axis=0)
+            # if pop is odd, add one extra random vector
+            if eps.shape[0] < pop:
+                eps = np.vstack([eps, np.random.randn(1, latent_dim).astype(np.float32)])
+        else:
+            eps = np.random.randn(pop, latent_dim).astype(np.float32)
 
-        for i in range(pop):
+        scores = np.zeros(eps.shape[0], dtype=np.float32)
+
+        # --- evaluate population ---
+        for i in range(eps.shape[0]):
             z_try = z + current_sigma * eps[i]
 
-            # Decode latent vector to image
             with torch.no_grad():
-                z_t = torch.from_numpy(z_try).unsqueeze(0).to(device)
-                img_t = decoder(z_t).cpu().numpy()[0]
-                img_for_query = np.clip(img_t.squeeze(), 0, 1)
+                z_t = torch.from_numpy(z_try).unsqueeze(0).to(device)   # (1, latent_dim)
+                img_t = decoder(z_t)                                    # (1,1,H,W)
+                img_np = img_t.detach().cpu().numpy()
+                img_for_query = np.clip(img_np[0, 0], 0.0, 1.0)         # (H,W)
 
-            # Query classifier
             probs = query_fn(img_for_query)
-            scores[i] = probs[class_index]
+            scores[i] = float(probs[class_index])
 
-        # Standardize scores
-        if scores.std() > 1e-8:
-            A = (scores - scores.mean()) / (scores.std() + 1e-8)
+        # --- standardize scores (stable) ---
+        std = scores.std()
+        if std > 1e-8:
+            A = (scores - scores.mean()) / (std + 1e-8)
         else:
             A = scores - scores.mean()
 
-        # NES gradient estimate
-        grad = (A.reshape(-1, 1) * eps).mean(axis=0) / current_sigma
+        # --- NES gradient estimate ---
+        grad = (A.reshape(-1, 1) * eps).mean(axis=0) / (current_sigma + 1e-12)
 
-        # Latent regularization
+        # --- latent L2 regularization (optional) ---
         if latent_reg > 0:
             grad = grad - latent_reg * z
 
-        # Update latent vector
+        # --- update z ---
         z = z + lr * grad
 
-        # Evaluate current latent
+        # --- evaluate current z ---
         with torch.no_grad():
             z_t = torch.from_numpy(z).unsqueeze(0).to(device)
-            img_t = decoder(z_t).cpu().numpy()[0]
-            img_for_eval = np.clip(img_t.squeeze(), 0, 1)
+            img_t = decoder(z_t)
+            img_np = img_t.detach().cpu().numpy()
+            img_for_eval = np.clip(img_np[0, 0], 0.0, 1.0)
 
-        cur_prob = query_fn(img_for_eval)[class_index]
+        cur_prob = float(query_fn(img_for_eval)[class_index])
 
-        # Track best solution
         if cur_prob > best_score:
             best_score = cur_prob
             best_z = z.copy()
@@ -97,34 +107,47 @@ def nes_optimize(decoder, query_fn, class_index, latent_dim=128, pop=50, sigma=0
 
         history.append(cur_prob)
 
-        # Early stopping with minimum iterations
-        if t >= min_iters and best_score > 0.99:
-            print(f"Early stopping triggered at iteration {t+1} with confidence {best_score:.4f}")
+        # Early stopping (after min_iters)
+        if t >= min_iters and best_score > 0.95:
+            print(f"Early stopping at iter {t+1}")
             break
 
     return best_z, history, best_image
 
 
-def create_query_fn(model, device='cpu', num_classes=7):
+
+def create_query_fn(model, device, num_classes):
     """Wrap classifier as a query function for black-box attacks."""
     model.eval()
 
-    def query_fn(img_numpy):
-        if len(img_numpy.shape) == 2:
-            img_tensor = torch.from_numpy(img_numpy).unsqueeze(0).float()
+    def to_model_tensor(img_numpy: np.ndarray) -> torch.Tensor:
+        img = img_numpy
+
+        # Accept: (H,W), (1,H,W), (H,W,1)
+        if img.ndim == 2:
+            img = img[None, None, ...]          # 1,1,H,W
+        elif img.ndim == 3:
+            if img.shape[0] == 1:               # 1,H,W
+                img = img[None, ...]            # 1,1,H,W
+            elif img.shape[-1] == 1:            # H,W,1
+                img = img.transpose(2, 0, 1)[None, ...]  # 1,1,H,W
+            else:
+                raise ValueError("Expected grayscale image with 1 channel (H,W,1) or (1,H,W).")
         else:
-            img_tensor = torch.from_numpy(img_numpy).float()
+            raise ValueError("Expected image as (H,W), (1,H,W), or (H,W,1).")
 
-        if len(img_tensor.shape) == 3:
-            img_tensor = img_tensor.unsqueeze(0)
+        t = torch.from_numpy(img).float()
+        t = torch.clamp(t, 0.0, 1.0)
+        return t
 
-        img_tensor = img_tensor.to(device)
-        img_tensor = torch.clamp(img_tensor, 0, 1)
+    def query_fn(img_numpy):
+        img_tensor = to_model_tensor(img_numpy).to(device)
 
         with torch.no_grad():
-            logits = model(img_tensor)
-            logits_np = logits.cpu().numpy()[0]
-            probs = softmax(logits_np)
+            logits = model(img_tensor)  # (1, num_classes)
+            if logits.shape[-1] != num_classes:
+                raise ValueError(f"Expected {num_classes} classes, got {logits.shape[-1]}")
+            probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
 
         return probs
 
@@ -135,13 +158,15 @@ def run_attack_suite(decoder, query_fn, target_names, target_classes, device,
                      nes_sigma, nes_pop, nes_iters, latent_dim,
                      lr, latent_reg, sigma_anneal, min_iters):
     """Run NES-based model inversion attack for multiple classes."""
-    print(f"Attack Configuration:")
+    print("Attack Configuration:")
     print(f"  Population size: {nes_pop}")
     print(f"  Noise scale (sigma): {nes_sigma}")
     print(f"  Iterations: {nes_iters}")
     print(f"  Latent dimension: {latent_dim}")
-    print(f"  Total queries per attack: {nes_pop * nes_iters}")
+    print(f"  Total queries per attack (upper bound): {nes_pop * nes_iters}")
     print("=" * 60)
+
+    decoder = decoder.to(device).eval()
 
     attack_results = {}
 
@@ -163,23 +188,25 @@ def run_attack_suite(decoder, query_fn, target_names, target_classes, device,
             device=device,
             latent_reg=latent_reg,
             sigma_anneal=sigma_anneal,
-            min_iters=min_iters
+            min_iters=min_iters,
+            use_antithetic=True
         )
 
         final_probs = query_fn(best_image)
-        final_confidence = final_probs[class_idx]
+        final_confidence = float(final_probs[class_idx])
 
         attack_results[class_idx] = {
-            'class_name': class_name,
-            'best_z': best_z,
-            'history': history,
-            'best_image': best_image,
-            'final_confidence': final_confidence,
-            'final_probs': final_probs
+            "class_name": class_name,
+            "best_z": best_z,
+            "history": history,
+            "best_image": best_image,
+            "final_confidence": final_confidence,
+            "final_probs": final_probs,
+            "total_queries_used": len(history) * nes_pop
         }
 
-        print(f"\nFinal confidence for {class_name}: {final_confidence:.4f}")
-        print(f"Final prediction: {target_names[np.argmax(final_probs)]}")
+        print(f"\nFinal confidence for {class_name}")
+        print(f"Prediction: {target_names[int(np.argmax(final_probs))]}")
         print(f"Total queries used: {len(history) * nes_pop}")
 
     return attack_results

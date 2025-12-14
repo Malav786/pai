@@ -1,5 +1,3 @@
-"""Neural network models for face recognition."""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,20 +38,31 @@ class SmallCNN(nn.Module):
         >>> output = model(x)  # shape: (32, 7)
     """
     
-    def __init__(self, in_channels=1, num_classes=7):
+    def __init__(self, in_channels=1, num_classes=7, dropout=0.3):
         super().__init__()
-        c = 32
-        self.conv1 = nn.Conv2d(in_channels, c, 3, 1, 1)
-        self.conv2 = nn.Conv2d(c, c*2, 3, 1, 1)
-        self.pool = nn.MaxPool2d(2)
-        # For 50x37 images: after conv1 (50x37), conv2 (50x37), pool(2) -> 25x18
-        # Feature map size: (c*2) * 25 * 18 = 64 * 450 = 28800
-        self.fc = nn.Sequential(nn.Flatten(), 
-                                nn.Linear((c*2) * 25 * 18, 256),
-                                nn.ReLU(),
-                                nn.Dropout(0.3),
-                                nn.Linear(256, num_classes)
-                               ) 
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 3, 1, 1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+
+            nn.Conv2d(32, 64, 3, 1, 1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, 3, 1, 1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+
+            nn.AdaptiveAvgPool2d((4, 4)),  # removes dependency on exact H,W
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 4 * 4, 256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, num_classes),
+        )
         
     def forward(self, x):
         """Forward pass through the network.
@@ -64,10 +73,8 @@ class SmallCNN(nn.Module):
         Returns:
             torch.Tensor: Output logits with shape (batch_size, num_classes).
         """
-        x = F.relu(self.conv1(x))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = self.fc(x)
-        return x
+        x = self.features(x)
+        return self.classifier(x)
 
 class ConvEncoder(nn.Module):
     """Convolutional Encoder for autoencoder architecture.

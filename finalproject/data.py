@@ -63,7 +63,11 @@ def load_lfw(loader=None, min_faces_per_person=70, resize=0.4, data_home='../dat
     target_names = loader.target_names
     return X, y, target_names
 
-def create_splits(X, y, test_size, val_size, random_state):
+def create_splits(X, y,
+    test_size: float = 0.2,
+    val_size: float = 0.1,
+    random_state: int = 42
+):
     """Split dataset into training, validation, and test sets.
     
     Creates three stratified splits of the data to ensure balanced class
@@ -93,9 +97,23 @@ def create_splits(X, y, test_size, val_size, random_state):
         ...     X, y, test_size=0.2, val_size=0.1, random_state=42
         ... )
     """
-    X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=test_size+val_size, stratify=y, random_state=random_state)
+    X = np.asarray(X)
+    y = np.asarray(y)
+
+    X_train, X_tmp, y_train, y_tmp = train_test_split(
+        X, y,
+        test_size=(test_size + val_size),
+        stratify=y,
+        random_state=random_state
+    )
     rel_test = test_size / (test_size + val_size)
-    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=rel_test, stratify=y_temp, random_state=random_state)
+
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_tmp, y_tmp,
+        test_size=rel_test,
+        stratify=y_tmp,
+        random_state=random_state
+    )
     return X_train, y_train, X_val, y_val, X_test, y_test
 
 class NumpyFaceDataset(data.Dataset):

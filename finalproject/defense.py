@@ -5,7 +5,7 @@ Defense mechanisms for protecting models against attacks.
 import numpy as np
 
 
-def defend_postprocess(probs, topk=None, decimals=2, add_noise=False):
+def defend_postprocess(probs, topk=None, decimals=2, add_noise=False, rng=None, eps=1e-12):
     """
     Apply defense mechanisms to softmax probabilities.
     
@@ -23,25 +23,34 @@ def defend_postprocess(probs, topk=None, decimals=2, add_noise=False):
     Returns:
         Defended probability vector (normalized to sum to 1)
     """
-    probs = probs.copy()
-    
-    # Top-k only: only return top-k probabilities
+    p = np.asarray(probs, dtype=np.float64).copy()
+    p = np.clip(p, eps, None)
+    p = p / p.sum()
+
     if topk is not None:
-        topk_idx = np.argsort(probs)[-topk:]
-        newp = np.zeros_like(probs)
-        newp[topk_idx] = probs[topk_idx]
-        probs = newp / (newp.sum() + 1e-12)
-    
-    # Round probabilities to reduce gradient resolution
+        idx = np.argsort(p)[-int(topk):]
+        masked = np.zeros_like(p)
+        masked[idx] = p[idx]
+        s = masked.sum()
+        p = masked / (s if s > 0 else 1.0)
+
     if decimals is not None:
-        probs = np.round(probs, decimals)
-        probs = probs / (probs.sum() + 1e-12)
-    
-    # Add calibrated noise
+        p = np.round(p, int(decimals))
+        s = p.sum()
+        if s <= 0:
+            # fallback: keep argmax only (nonzero)
+            m = np.argmax(probs)
+            p = np.zeros_like(p)
+            p[m] = 1.0
+        else:
+            p = p / s
+
     if add_noise:
-        noise = np.random.dirichlet([0.1] * len(probs))
-        probs = probs + 0.01 * noise
-        probs = probs / probs.sum()
-    
-    return probs
+        if rng is None:
+            rng = np.random.default_rng()
+        noise = rng.dirichlet([0.1] * len(p))
+        p = p + 0.01 * noise
+        p = p / p.sum()
+
+    return p
 

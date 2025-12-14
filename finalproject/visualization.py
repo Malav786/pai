@@ -64,7 +64,7 @@ def visualize_attack_results(attack_results, nes_pop, target_names):
         final_confidence = result['final_confidence']
 
         axes[0, idx].imshow(best_image, cmap='gray')
-        axes[0, idx].set_title(f'{class_name}\nConfidence: {final_confidence:.3f}',
+        axes[0, idx].set_title(f'{class_name}',
                                fontsize=12, fontweight='bold')
         axes[0, idx].axis('off')
 
@@ -83,7 +83,7 @@ def visualize_attack_results(attack_results, nes_pop, target_names):
     print("ATTACK SUMMARY")
     print("=" * 60)
     for class_idx, result in attack_results.items():
-        print(f"{target_names[class_idx]:20s} | Confidence: {result['final_confidence']:.4f} | "
+        print(f"{target_names[class_idx]:20s} | "
               f"Queries: {len(result['history']) * nes_pop}")
     print("=" * 60)
 
