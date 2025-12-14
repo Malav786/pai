@@ -84,7 +84,7 @@ class ConvEncoder(nn.Module):
         latent_dim (int): Dimension of the latent space. Default is 128.
         in_channels (int): Number of input channels. Default is 1 (grayscale).
     """
-    def __init__(self, latent_dim=128, in_channels=1):
+    def __init__(self, latent_dim, in_channels):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, 32, 4, 2, 1), nn.ReLU(),
@@ -115,7 +115,7 @@ class ConvDecoder(nn.Module):
         latent_dim (int): Dimension of the latent space. Default is 128.
         out_channels (int): Number of output channels. Default is 1 (grayscale).
     """
-    def __init__(self, latent_dim=128, out_channels=1):
+    def __init__(self, latent_dim, out_channels):
         super().__init__()
         # For 50x37 images: need to reshape to 128*6*4
         self.fc = nn.Linear(latent_dim, 128*6*4)
