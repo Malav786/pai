@@ -8,7 +8,8 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-numpy = "^2.1.1"
+# Captum currently requires numpy < 2.0, so we pin numpy accordingly.
+numpy = ">=1.26,<2.0"
 matplotlib = "^3.9.2"
 notebook = "^7.2.2"
 ipython = "^8.27.0"
@@ -22,13 +23,32 @@ scipy = "^1.14.1"
 onnx = "^1.17.0"
 tqdm = "^4.67.1"
 scikit-image = "^0.25.2"
+captum = "^0.8.0"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.8.0"
-mypy = "^1.11.2"
-mypy-extensions = "^1.0.0"
+black = {version = "^24.8.0", extras = ["jupyter"]}
 isort = "^5.13.2"
-flake8 = "^7.1.1"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.(pyi?|ipynb)$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | __pycache__
+)/
+'''
 
 [build-system]
 requires = ["poetry-core"]

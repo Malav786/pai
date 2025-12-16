@@ -5,18 +5,24 @@ import torch
 from tqdm import trange
 
 
-def softmax(x):
-    """Compute softmax function for numerical stability."""
-    e = np.exp(x - np.max(x))
-    return e / e.sum()
-
-
-def nes_optimize(decoder, query_fn, class_index, latent_dim, pop, sigma,
-                lr, iters, device, latent_reg, sigma_anneal,
-                min_iters, use_antithetic):
+def nes_optimize(
+    decoder,
+    query_fn,
+    class_index,
+    latent_dim,
+    pop,
+    sigma,
+    lr,
+    iters,
+    device,
+    latent_reg,
+    sigma_anneal,
+    min_iters,
+    use_antithetic,
+):
     """
     Optimize latent vector using NES to maximize target class probability.
-    
+
     Args:
         decoder: PyTorch decoder (latent vector -> image)
         query_fn: Function to query the classifier
@@ -46,7 +52,9 @@ def nes_optimize(decoder, query_fn, class_index, latent_dim, pop, sigma,
     initial_sigma = float(sigma)
 
     for t in trange(iters, desc="NES Optimization"):
-        current_sigma = initial_sigma * (1.0 - 0.9 * (t / iters)) if sigma_anneal else initial_sigma
+        current_sigma = (
+            initial_sigma * (1.0 - 0.9 * (t / iters)) if sigma_anneal else initial_sigma
+        )
 
         # --- sample perturbations ---
         if use_antithetic:
@@ -55,7 +63,9 @@ def nes_optimize(decoder, query_fn, class_index, latent_dim, pop, sigma,
             eps = np.concatenate([eps_half, -eps_half], axis=0)
             # if pop is odd, add one extra random vector
             if eps.shape[0] < pop:
-                eps = np.vstack([eps, np.random.randn(1, latent_dim).astype(np.float32)])
+                eps = np.vstack(
+                    [eps, np.random.randn(1, latent_dim).astype(np.float32)]
+                )
         else:
             eps = np.random.randn(pop, latent_dim).astype(np.float32)
 
@@ -66,10 +76,10 @@ def nes_optimize(decoder, query_fn, class_index, latent_dim, pop, sigma,
             z_try = z + current_sigma * eps[i]
 
             with torch.no_grad():
-                z_t = torch.from_numpy(z_try).unsqueeze(0).to(device)   # (1, latent_dim)
-                img_t = decoder(z_t)                                    # (1,1,H,W)
+                z_t = torch.from_numpy(z_try).unsqueeze(0).to(device)  # (1, latent_dim)
+                img_t = decoder(z_t)  # (1,1,H,W)
                 img_np = img_t.detach().cpu().numpy()
-                img_for_query = np.clip(img_np[0, 0], 0.0, 1.0)         # (H,W)
+                img_for_query = np.clip(img_np[0, 0], 0.0, 1.0)  # (H,W)
 
             probs = query_fn(img_for_query)
             scores[i] = float(probs[class_index])
@@ -115,7 +125,6 @@ def nes_optimize(decoder, query_fn, class_index, latent_dim, pop, sigma,
     return best_z, history, best_image
 
 
-
 def create_query_fn(model, device, num_classes):
     """Wrap classifier as a query function for black-box attacks."""
     model.eval()
@@ -125,14 +134,16 @@ def create_query_fn(model, device, num_classes):
 
         # Accept: (H,W), (1,H,W), (H,W,1)
         if img.ndim == 2:
-            img = img[None, None, ...]          # 1,1,H,W
+            img = img[None, None, ...]  # 1,1,H,W
         elif img.ndim == 3:
-            if img.shape[0] == 1:               # 1,H,W
-                img = img[None, ...]            # 1,1,H,W
-            elif img.shape[-1] == 1:            # H,W,1
+            if img.shape[0] == 1:  # 1,H,W
+                img = img[None, ...]  # 1,1,H,W
+            elif img.shape[-1] == 1:  # H,W,1
                 img = img.transpose(2, 0, 1)[None, ...]  # 1,1,H,W
             else:
-                raise ValueError("Expected grayscale image with 1 channel (H,W,1) or (1,H,W).")
+                raise ValueError(
+                    "Expected grayscale image with 1 channel (H,W,1) or (1,H,W)."
+                )
         else:
             raise ValueError("Expected image as (H,W), (1,H,W), or (H,W,1).")
 
@@ -146,7 +157,9 @@ def create_query_fn(model, device, num_classes):
         with torch.no_grad():
             logits = model(img_tensor)  # (1, num_classes)
             if logits.shape[-1] != num_classes:
-                raise ValueError(f"Expected {num_classes} classes, got {logits.shape[-1]}")
+                raise ValueError(
+                    f"Expected {num_classes} classes, got {logits.shape[-1]}"
+                )
             probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
 
         return probs
@@ -154,9 +167,83 @@ def create_query_fn(model, device, num_classes):
     return query_fn
 
 
-def run_attack_suite(decoder, query_fn, target_names, target_classes, device,
-                     nes_sigma, nes_pop, nes_iters, latent_dim,
-                     lr, latent_reg, sigma_anneal, min_iters):
+def create_defended_query_fn(model, device, num_classes, defense_config):
+    """
+    Create a query function with defense mechanisms applied.
+
+    Args:
+        model: The victim classifier model
+        device: Device to run model on
+        num_classes: Number of classes
+        defense_config: Dict with defense parameters (topk, decimals, add_noise)
+
+    Returns:
+        Query function that returns defended probabilities
+    """
+    from finalproject.defense import defend_postprocess
+
+    model.eval()
+
+    def to_model_tensor(img_numpy: np.ndarray) -> torch.Tensor:
+        img = img_numpy
+
+        # Accept: (H,W), (1,H,W), (H,W,1)
+        if img.ndim == 2:
+            img = img[None, None, ...]  # 1,1,H,W
+        elif img.ndim == 3:
+            if img.shape[0] == 1:  # 1,H,W
+                img = img[None, ...]  # 1,1,H,W
+            elif img.shape[-1] == 1:  # H,W,1
+                img = img.transpose(2, 0, 1)[None, ...]  # 1,1,H,W
+            else:
+                raise ValueError(
+                    "Expected grayscale image with 1 channel (H,W,1) or (1,H,W)."
+                )
+        else:
+            raise ValueError("Expected image as (H,W), (1,H,W), or (H,W,1).")
+
+        t = torch.from_numpy(img).float()
+        t = torch.clamp(t, 0.0, 1.0)
+        return t
+
+    def query_fn(img_numpy):
+        img_tensor = to_model_tensor(img_numpy).to(device)
+
+        with torch.no_grad():
+            logits = model(img_tensor)  # (1, num_classes)
+            if logits.shape[-1] != num_classes:
+                raise ValueError(
+                    f"Expected {num_classes} classes, got {logits.shape[-1]}"
+                )
+            probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
+
+        # Apply defense
+        defended_probs = defend_postprocess(
+            probs,
+            topk=defense_config.get("topk"),
+            decimals=defense_config.get("decimals"),
+            add_noise=defense_config.get("add_noise", False),
+        )
+        return defended_probs
+
+    return query_fn
+
+
+def run_attack_suite(
+    decoder,
+    query_fn,
+    target_names,
+    target_classes,
+    device,
+    nes_sigma,
+    nes_pop,
+    nes_iters,
+    latent_dim,
+    lr,
+    latent_reg,
+    sigma_anneal,
+    min_iters,
+):
     """Run NES-based model inversion attack for multiple classes."""
     print("Attack Configuration:")
     print(f"  Population size: {nes_pop}")
@@ -189,7 +276,7 @@ def run_attack_suite(decoder, query_fn, target_names, target_classes, device,
             latent_reg=latent_reg,
             sigma_anneal=sigma_anneal,
             min_iters=min_iters,
-            use_antithetic=True
+            use_antithetic=True,
         )
 
         final_probs = query_fn(best_image)
@@ -202,7 +289,7 @@ def run_attack_suite(decoder, query_fn, target_names, target_classes, device,
             "best_image": best_image,
             "final_confidence": final_confidence,
             "final_probs": final_probs,
-            "total_queries_used": len(history) * nes_pop
+            "total_queries_used": len(history) * nes_pop,
         }
 
         print(f"\nFinal confidence for {class_name}")

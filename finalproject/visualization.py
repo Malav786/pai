@@ -4,7 +4,9 @@ import torch
 from torch.utils.data import DataLoader
 
 
-def visualize_classifier_predictions(model, dataset, target_names, device='cpu', num_images=8):
+def visualize_classifier_predictions(
+    model, dataset, target_names, device="cpu", num_images=8
+):
     """
     Visualizes a batch of test images with their true labels and model predictions.
 
@@ -28,15 +30,16 @@ def visualize_classifier_predictions(model, dataset, target_names, device='cpu',
         fig, axes = plt.subplots(2, num_images, figsize=(2 * num_images, 4))
         for i in range(min(num_images, len(xb))):
             img = xb[i, 0].cpu().numpy()
-            axes[0, i].imshow(img, cmap='gray')
-            axes[0, i].set_title(f'True: {target_names[yb_np[i]]}', fontsize=8)
-            axes[0, i].axis('off')
+            axes[0, i].imshow(img, cmap="gray")
+            axes[0, i].set_title(f"True: {target_names[yb_np[i]]}", fontsize=8)
+            axes[0, i].axis("off")
 
-            axes[1, i].imshow(img, cmap='gray')
-            color = 'green' if preds[i] == yb_np[i] else 'red'
-            axes[1, i].set_title(f'Pred: {target_names[preds[i]]}',
-                                fontsize=8, color=color)
-            axes[1, i].axis('off')
+            axes[1, i].imshow(img, cmap="gray")
+            color = "green" if preds[i] == yb_np[i] else "red"
+            axes[1, i].set_title(
+                f"Pred: {target_names[preds[i]]}", fontsize=8, color=color
+            )
+            axes[1, i].axis("off")
 
         plt.tight_layout()
         plt.show()
@@ -59,23 +62,24 @@ def visualize_attack_results(attack_results, nes_pop, target_names):
 
     for idx, (class_idx, result) in enumerate(attack_results.items()):
         class_name = target_names[class_idx]
-        best_image = result['best_image']
-        history = result['history']
-        final_confidence = result['final_confidence']
+        best_image = result["best_image"]
+        history = result["history"]
+        final_confidence = result["final_confidence"]
 
-        axes[0, idx].imshow(best_image, cmap='gray')
-        axes[0, idx].set_title(f'{class_name}',
-                               fontsize=12, fontweight='bold')
-        axes[0, idx].axis('off')
+        axes[0, idx].imshow(best_image, cmap="gray")
+        axes[0, idx].set_title(f"{class_name}", fontsize=12, fontweight="bold")
+        axes[0, idx].axis("off")
 
         axes[1, idx].plot(history, linewidth=2)
-        axes[1, idx].set_xlabel('Iteration', fontsize=10)
-        axes[1, idx].set_ylabel('Target Class Probability', fontsize=10)
-        axes[1, idx].set_title('Optimization Progress', fontsize=11)
+        axes[1, idx].set_xlabel("Iteration", fontsize=10)
+        axes[1, idx].set_ylabel("Target Class Probability", fontsize=10)
+        axes[1, idx].set_title("Optimization Progress", fontsize=11)
         axes[1, idx].grid(True, alpha=0.3)
         axes[1, idx].set_ylim([0, 1.0])
 
-    plt.suptitle('Model Inversion Attack Results', fontsize=16, fontweight='bold', y=0.995)
+    plt.suptitle(
+        "Model Inversion Attack Results", fontsize=16, fontweight="bold", y=0.995
+    )
     plt.tight_layout()
     plt.show()
 
@@ -83,14 +87,25 @@ def visualize_attack_results(attack_results, nes_pop, target_names):
     print("ATTACK SUMMARY")
     print("=" * 60)
     for class_idx, result in attack_results.items():
-        print(f"{target_names[class_idx]:20s} | "
-              f"Queries: {len(result['history']) * nes_pop}")
+        print(
+            f"{target_names[class_idx]:20s} | "
+            f"Queries: {len(result['history']) * nes_pop}"
+        )
     print("=" * 60)
 
 
-def visualize_real_vs_reconstructed(real_images, real_labels, real_predictions, real_confidences,
-                                    reconstructed_images, reconstructed_labels, reconstructed_predictions, reconstructed_confidences,
-                                    target_names, target_class_indices):
+def visualize_real_vs_reconstructed(
+    real_images,
+    real_labels,
+    real_predictions,
+    real_confidences,
+    reconstructed_images,
+    reconstructed_labels,
+    reconstructed_predictions,
+    reconstructed_confidences,
+    target_names,
+    target_class_indices,
+):
     """
     Visualizes real and reconstructed images side-by-side with their predictions and confidence scores.
 
@@ -116,23 +131,38 @@ def visualize_real_vs_reconstructed(real_images, real_labels, real_predictions, 
         real_indices = np.where(real_labels == class_idx)[0]
         if len(real_indices) > 0:
             real_idx = real_indices[0]
-            axes[0, idx].imshow(real_images[real_idx], cmap='gray')
+            axes[0, idx].imshow(real_images[real_idx], cmap="gray")
             pred_name = target_names[real_predictions[real_idx]]
-            is_correct = "✓" if real_predictions[real_idx] == real_labels[real_idx] else "✗"
-            axes[0, idx].set_title(f'Real: {class_name}\nPred: {pred_name} {is_correct}\nConf: {real_confidences[real_idx]:.3f}',
-                                   fontsize=10)
-            axes[0, idx].axis('off')
+            is_correct = (
+                "✓" if real_predictions[real_idx] == real_labels[real_idx] else "✗"
+            )
+            axes[0, idx].set_title(
+                f"Real: {class_name}\nPred: {pred_name} {is_correct}\nConf: {real_confidences[real_idx]:.3f}",
+                fontsize=10,
+            )
+            axes[0, idx].axis("off")
 
         # Bottom row: Reconstructed image
         recon_idx = np.where(reconstructed_labels == class_idx)[0][0]
-        axes[1, idx].imshow(reconstructed_images[recon_idx], cmap='gray')
+        axes[1, idx].imshow(reconstructed_images[recon_idx], cmap="gray")
         pred_name = target_names[reconstructed_predictions[recon_idx]]
-        is_correct = "✓" if reconstructed_predictions[recon_idx] == reconstructed_labels[recon_idx] else "✗"
-        axes[1, idx].set_title(f'Reconstructed: {class_name}\nPred: {pred_name} {is_correct}\nConf: {reconstructed_confidences[recon_idx]:.3f}',
-                               fontsize=10, fontweight='bold')
-        axes[1, idx].axis('off')
+        is_correct = (
+            "✓"
+            if reconstructed_predictions[recon_idx] == reconstructed_labels[recon_idx]
+            else "✗"
+        )
+        axes[1, idx].set_title(
+            f"Reconstructed: {class_name}\nPred: {pred_name} {is_correct}\nConf: {reconstructed_confidences[recon_idx]:.3f}",
+            fontsize=10,
+            fontweight="bold",
+        )
+        axes[1, idx].axis("off")
 
-    plt.suptitle('Real vs Reconstructed Images Comparison', fontsize=16, fontweight='bold', y=0.995)
+    plt.suptitle(
+        "Real vs Reconstructed Images Comparison",
+        fontsize=16,
+        fontweight="bold",
+        y=0.995,
+    )
     plt.tight_layout()
     plt.show()
-

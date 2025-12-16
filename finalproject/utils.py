@@ -1,6 +1,22 @@
-import os, random, numpy as np, torch
+"""Utility functions for reproducibility and random seed management"""
+
+import os
+import random
+import numpy as np
+import torch
+
 
 def set_seed(seed: int = 42, deterministic: bool = True) -> None:
+    """Set random seeds for reproducibility across all random number generators.
+
+    Args:
+        seed (int): Random seed value to use. Default is 42.
+        deterministic (bool): If True, enables deterministic algorithms in PyTorch
+            and disables cuDNN benchmarking for reproducibility. Default is True.
+
+    Returns:
+        None
+    """
     random.seed(seed)
     np.random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
